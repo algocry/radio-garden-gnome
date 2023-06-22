@@ -1,0 +1,13 @@
+{
+  "description": "Listen to all world radios on internet",
+  "gettext-domain": "mailto://0x0is1@proton.me",
+  "name": "Radio Graden - Gnome",
+  "shell-version": [
+    "40",
+    "41",
+    "42"
+  ],
+  "url": "https://github.com/hslbck/gnome-shell-extension-radio",
+  "uuid": "radio-garden-gnome@0x0is1",
+  "version": 19
+}
