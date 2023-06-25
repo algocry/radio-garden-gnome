@@ -96,14 +96,11 @@ var RadioExtension = GObject.registerClass(
       // Create the menu items
       this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-      this._previousItem = new PopupMenu.PopupMenuItem("Previous");
-      this.menu.addMenuItem(this._previousItem);
+      this._myChannelsMenu = new PopupMenu.PopupMenuItem("My Channels");
+      this.menu.addMenuItem(this._myChannelsMenu);
 
-      this._playPauseItem = new PopupMenu.PopupMenuItem("Play/Pause");
-      this.menu.addMenuItem(this._playPauseItem);
-
-      this._nextItem = new PopupMenu.PopupMenuItem("Next");
-      this.menu.addMenuItem(this._nextItem);
+      this._favourite = new PopupMenu.PopupMenuItem("Favourite");
+      this.menu.addMenuItem(this._favourite);
 
       this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
