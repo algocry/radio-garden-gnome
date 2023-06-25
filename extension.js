@@ -37,25 +37,6 @@ var RadioExtension = GObject.registerClass(
           width: 350
       });
 
-      // Play and Stop Button Images
-      // this.playIcon = new St.Icon({
-      //     icon_name: 'media-playback-start-symbolic',
-      //     style_class: 'popup-menu-icon'
-      // });
-      // this.stopIcon = new St.Icon({
-      //     icon_name: 'media-playback-stop-symbolic',
-      //     style_class: 'popup-menu-icon'
-      // });
-
-      // Play - Stop Button
-      // this.playButton = new St.Button({
-      //     style_class: 'radio-menu-action',
-      //     can_focus: true
-      // });
-
-      // Set the Icon of the Button
-      // this.playButton.set_child(this.playIcon);
-
       // Currently Played Label
       this.playLabel = new St.Label({
           text: "Station",
@@ -74,7 +55,6 @@ var RadioExtension = GObject.registerClass(
 
 
       // Add Button to the BoxLayout
-      // this.controlsBox.add(this.playButton);
       this.controlsBox.add(this.playLabel);
 
       // tagListlabel
@@ -90,11 +70,9 @@ var RadioExtension = GObject.registerClass(
       this.menu.addMenuItem(this.tagItem);
       this._buildControllerItems();
 
-      // Connect the Button
-      // this.playButton.connect('clicked', this._onPlayButtonClicked.bind(this));
-
       // Create the menu items
-      this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+      const sep1 = new PopupMenu.PopupSeparatorMenuItem();
+      this.menu.addMenuItem(sep1);
 
       this._myChannelsMenu = new PopupMenu.PopupMenuItem("My Channels");
       this.menu.addMenuItem(this._myChannelsMenu);
@@ -102,12 +80,14 @@ var RadioExtension = GObject.registerClass(
       this._favourite = new PopupMenu.PopupMenuItem("Favourite");
       this.menu.addMenuItem(this._favourite);
 
-      this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+      const sep2 = new PopupMenu.PopupSeparatorMenuItem();
+      this.menu.addMenuItem(sep2);
 
       this._buildMenuItems();
 
     }
 
+    // UI builders
     _buildControllerItems() {
         this._buildControllerItemButtons();
         // settings, add channel and search item
@@ -138,12 +118,6 @@ var RadioExtension = GObject.registerClass(
         this.settingsItem.add_child(this.addChannelButton);
         this.settingsItem.add_child(this.searchButton);
         this.menu.addMenuItem(this.settingsItem);
-    }
-
-    _destroyMenuItems() {
-        this._destroyMenuItemButtons();
-        this.separator2.destroy();
-        this.settingsItem.destroy();
     }
 
     _buildMenuItemButtons() {
@@ -268,6 +242,7 @@ var RadioExtension = GObject.registerClass(
         });
     }
 
+    //event handlers
     _updateWithIndex(){
       const index = this.playIndex;
       this.tagListLabel.text = this.channelList[index][1];
@@ -316,28 +291,7 @@ var RadioExtension = GObject.registerClass(
       }
     }
 
-    _destroyMenuItemButtons() {
-        this.settingsIcon.destroy();
-        this.settingsButton.destroy();
-        this.channelListIcon.destroy();
-        this.channelListButton.destroy();
-        this.addChannelIcon.destroy();
-        this.addChannelButton.destroy();
-        this.searchIcon.destroy();
-        this.searchButton.destroy();
-    }
-
-    _destroyMenuItemButtons() {
-        this.settingsIcon.destroy();
-        this.settingsButton.destroy();
-        this.channelListIcon.destroy();
-        this.channelListButton.destroy();
-        this.addChannelIcon.destroy();
-        this.addChannelButton.destroy();
-        this.searchIcon.destroy();
-        this.searchButton.destroy();
-    }
-
+    // sub-action listeners
     _play(id){
       var url = getListenUrl(id);
       playStream(url);
@@ -365,6 +319,58 @@ var RadioExtension = GObject.registerClass(
         return;
       }
     }
+
+    // destructors
+    _destroyMenuItemButtons() {
+        this.settingsIcon.destroy();
+        this.settingsButton.destroy();
+        this.channelListIcon.destroy();
+        this.channelListButton.destroy();
+        this.addChannelIcon.destroy();
+        this.addChannelButton.destroy();
+        this.searchIcon.destroy();
+        this.searchButton.destroy();
+    }
+
+    _destroyControllerItemButtons() {
+        this.previousIcon.destroy();
+        this.previousButton.destroy();
+        this.playIcon.destroy();
+        this.playButton.destroy();
+        this.pauseIcon.destroy();
+        this.nextIcon.destroy();
+        this.nextButton.destroy();
+        this.powerIcon.destroy();
+        this.powerButton.destroy();
+    }
+
+    _destroyMenuItems() {
+        this._destroyMenuItemButtons();
+        this.separator2.destroy();
+        this.settingsItem.destroy();
+    }
+
+    _destroyControllerItems(){
+      this._destroyControllerItemButtons();
+      this.controllerMenu.destroy();
+    }
+
+    _finish(){
+      // un-_init-ing class
+      this.iconStopped.destroy();
+      this.iconPlaying.destroy();
+      this._radioIcon.destroy();
+      this.actor.destroy();
+      this.playLabel.destroy();
+      this.tagListBox.destroy();
+      this.tagItem.destroy();
+      this.tagListLabel.destroy();
+      this.sep1.destroy();
+      this.sep2.destroy();
+      this._myChannelsMenu.destroy();
+      this._favourite.destroy();
+      this.controlsBox.destroy();
+    }
   }
 );
 
@@ -379,5 +385,8 @@ function enable() {
 
 function disable() {
   Main.panel.statusArea["radio-extension"].destroy();
-  this._stop();
+  radioExtension._destroyMenuItems();
+  radioExtension._destroyControllerItems();
+  radioExtension._stop();
+  radioExtension._finish();
 }
