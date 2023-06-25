@@ -1,3 +1,4 @@
 lib/extra/node-version/node_modules
 lib/extra/node-version/package-lock.json
 a.js
+*.bak*
