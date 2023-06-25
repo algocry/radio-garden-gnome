@@ -5,7 +5,10 @@ This is an unoffical extension of [radio.garden](http://radio.garden) website. G
 
 ## Project Phase
 
-This project is still in library testing phase and about to begin UI development soon.
+This project is still in library testing phase and about to UI development soon.
+
+## Previews
+![preview1](./previews/ui-preview-1.png)
 
 ## Contribution and Feedback
 
