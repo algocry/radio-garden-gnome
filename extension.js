@@ -6,13 +6,19 @@ const Lang = imports.lang;
 const ExtensionUtils = imports.misc.extensionUtils;
 const Extension = ExtensionUtils.getCurrentExtension();
 const { playStream, stopStream } = Extension.imports.utils.player;
+const { runCommand, showNotification } = Extension.imports.utils.sysUtils;
+const { httpRequest, getChannels, getListenUrl, searchRG } = Extension.imports.lib.librgarden;
 
 var RadioExtension = GObject.registerClass(
   class RadioExtension extends PanelMenu.Button {
 
     _init() {
       super._init(0.0, "Radio");
+      this.isOn = false;
       this.isPlaying = false;
+
+      this.channelList = null;
+      this.channelIDList = null;
 
       this.iconStopped = Gio.icon_new_for_string(Extension.path + '/icons/gser-icon-stopped-symbolic.svg');
       this.iconPlaying = Gio.icon_new_for_string(Extension.path + '/icons/gser-icon-playing-symbolic.svg');
@@ -32,23 +38,23 @@ var RadioExtension = GObject.registerClass(
       });
 
       // Play and Stop Button Images
-      this.playIcon = new St.Icon({
-          icon_name: 'media-playback-start-symbolic',
-          style_class: 'popup-menu-icon'
-      });
-      this.stopIcon = new St.Icon({
-          icon_name: 'media-playback-stop-symbolic',
-          style_class: 'popup-menu-icon'
-      });
+      // this.playIcon = new St.Icon({
+      //     icon_name: 'media-playback-start-symbolic',
+      //     style_class: 'popup-menu-icon'
+      // });
+      // this.stopIcon = new St.Icon({
+      //     icon_name: 'media-playback-stop-symbolic',
+      //     style_class: 'popup-menu-icon'
+      // });
 
       // Play - Stop Button
-      this.playButton = new St.Button({
-          style_class: 'radio-menu-action',
-          can_focus: true
-      });
+      // this.playButton = new St.Button({
+      //     style_class: 'radio-menu-action',
+      //     can_focus: true
+      // });
 
       // Set the Icon of the Button
-      this.playButton.set_child(this.playIcon);
+      // this.playButton.set_child(this.playIcon);
 
       // Currently Played Label
       this.playLabel = new St.Label({
@@ -68,14 +74,13 @@ var RadioExtension = GObject.registerClass(
 
 
       // Add Button to the BoxLayout
-      this.controlsBox.add(this.playButton);
+      // this.controlsBox.add(this.playButton);
       this.controlsBox.add(this.playLabel);
 
       // tagListlabel
       this.tagListLabel = new St.Label({
           text: "Location"
       });
-
       this.tagListBox.add(this.tagListLabel);
 
 
@@ -83,9 +88,10 @@ var RadioExtension = GObject.registerClass(
       this.menu.box.add_child(this.controlsBox);
       this.tagItem.add_child(this.tagListBox);
       this.menu.addMenuItem(this.tagItem);
+      this._buildControllerItems();
 
       // Connect the Button
-      this.playButton.connect('clicked', this._onPlayButtonClicked.bind(this));
+      // this.playButton.connect('clicked', this._onPlayButtonClicked.bind(this));
 
       // Create the menu items
       this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
@@ -105,18 +111,18 @@ var RadioExtension = GObject.registerClass(
 
     }
 
-    _onPlayButtonClicked() {
-      if(this.isPlaying){
-        this._stop();
-        this.isPlaying = false;
-        this.playButton.set_child(this.playIcon);
-        this.tagListLabel.text = "Location 2";
-        return;
-      }
-      this._play();
-      this.isPlaying = true;
-      this.playButton.set_child(this.stopIcon);
-
+    _buildControllerItems() {
+        this._buildControllerItemButtons();
+        // settings, add channel and search item
+        this.controllerMenu = new PopupMenu.PopupBaseMenuItem({
+            reactive: false,
+            can_focus: false
+        });
+        this.controllerMenu.add_child(this.previousButton);
+        this.controllerMenu.add_child(this.playButton);
+        this.controllerMenu.add_child(this.nextButton);
+        this.controllerMenu.add_child(this.powerButton);
+        this.menu.addMenuItem(this.controllerMenu);
     }
 
     _buildMenuItems() {
@@ -204,6 +210,115 @@ var RadioExtension = GObject.registerClass(
         });
     }
 
+    _buildControllerItemButtons() {
+        this.previousIcon = new St.Icon({
+            icon_name: 'media-skip-backward-symbolic',
+            style_class: 'popup-menu-icon'
+        });
+        this.previousButton = new St.Button({
+            style_class: 'radio-menu-action',
+            can_focus: true
+        });
+        this.previousButton.set_child(this.previousIcon);
+        this.previousButton.connect('clicked', () => {
+            this._stop();
+            this._previous();
+        });
+
+        this.playIcon = new St.Icon({
+            icon_name: 'media-playback-start-symbolic',
+            style_class: 'popup-menu-icon'
+        });
+        this.playButton = new St.Button({
+            style_class: 'radio-menu-action',
+            can_focus: true
+        });
+        this.playButton.set_child(this.playIcon);
+        this.playButton.connect('clicked', () => {
+            this._onPlayButtonClicked();
+        });
+
+        this.pauseIcon = new St.Icon({
+            icon_name: 'media-playback-pause-symbolic',
+            style_class: 'popup-menu-icon'
+        });
+
+        this.nextIcon = new St.Icon({
+            icon_name: 'media-skip-forward-symbolic',
+            style_class: 'popup-menu-icon'
+        });
+        this.nextButton = new St.Button({
+            style_class: 'radio-menu-action',
+            can_focus: true
+        });
+        this.nextButton.set_child(this.nextIcon);
+        this.nextButton.connect('clicked', () => {
+            this._stop();
+            this._next();
+        });
+
+        this.powerIcon = new St.Icon({
+            icon_name: 'system-shutdown-symbolic',
+            style_class: 'popup-menu-icon'
+        });
+        this.powerButton = new St.Button({
+            style_class: 'radio-menu-action',
+            can_focus: true
+        });
+        this.powerButton.set_child(this.powerIcon);
+        this.powerButton.connect('clicked', () => {
+            this._powerOn();
+        });
+    }
+
+    _updateWithIndex(){
+      const index = this.playIndex;
+      this.tagListLabel.text = this.channelList[index][1];
+      this.playLabel.text = this.channelList[index][0];
+      this._play(this.channelIDList[index]);
+    }
+
+    _onPlayButtonClicked() {
+      if(!this.isOn) return;
+      if(this.isPlaying){
+        this._stop();
+        this.isPlaying = false;
+        this.playButton.set_child(this.playIcon);
+        return;
+      }
+      this._updateWithIndex();
+      this.isPlaying = true;
+      this.playButton.set_child(this.pauseIcon);
+    }
+
+    _powerOn(){
+      if(this.isOn){
+        this.channelList = null;
+        this.channelIDList = null;
+        this._stop();
+        this.isPlaying = false;
+        this.playButton.set_child(this.playIcon);
+        this.isOn = false;
+        if(this.powerButton.has_style_class_name("power-active")){
+          this.powerButton.remove_style_class_name("power-active");
+        }
+        return;
+      }
+      this.playIndex = 0;
+      this.isOn = true;
+      searchRG("mirchi")
+        .then(json => {
+          [ this.channelList, this.channelIDList ] = json;
+        })
+        .catch(error => {
+          const errorMessage = `Error occurred: ${error}`;
+          showNotification(errorMessage);
+        });
+      if(!this.powerButton.has_style_class_name("power-active")){
+        this.powerButton.add_style_class_name("power-active");
+      }
+    }
+
     _destroyMenuItemButtons() {
         this.settingsIcon.destroy();
         this.settingsButton.destroy();
@@ -215,12 +330,43 @@ var RadioExtension = GObject.registerClass(
         this.searchButton.destroy();
     }
 
-    _play(){
-      playStream("http://radio.garden/api/ara/content/listen/ZhLY6m3C/channel.mp3");
+    _destroyMenuItemButtons() {
+        this.settingsIcon.destroy();
+        this.settingsButton.destroy();
+        this.channelListIcon.destroy();
+        this.channelListButton.destroy();
+        this.addChannelIcon.destroy();
+        this.addChannelButton.destroy();
+        this.searchIcon.destroy();
+        this.searchButton.destroy();
+    }
+
+    _play(id){
+      var url = getListenUrl(id);
+      playStream(url);
+      showNotification(url);
     }
 
     _stop(){
       stopStream();
+    }
+
+    _next(){
+      if(!this.isOn) return;
+      if(this.playIndex < this.channelList.length-1){
+        this.playIndex++;
+        this._updateWithIndex();
+        return;
+      }
+    }
+
+    _previous(){
+      if(!this.isOn) return;
+      if(this.playIndex>0){
+        this.playIndex--;
+        this._updateWithIndex();
+        return;
+      }
     }
   }
 );
@@ -236,4 +382,5 @@ function enable() {
 
 function disable() {
   Main.panel.statusArea["radio-extension"].destroy();
+  this._stop();
 }
