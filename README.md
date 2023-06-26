@@ -8,7 +8,7 @@ This is an unoffical extension of [radio.garden](http://radio.garden) website. G
 This project is still in library testing phase and about to UI development soon.
 
 ## Previews
-![preview1](./previews/ui-preview-1.png)
+![preview1](./previews/ui-preview-2.png)
 
 ## Contribution and Feedback
 
