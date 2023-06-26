@@ -19,6 +19,14 @@ var RadioExtension = GObject.registerClass(
       this.channelList = null;
       this.channelIDList = null;
 
+      this.playIndex = 0;
+      this.fplayIndex = 0;
+
+      this.fchannelList = null;
+      this.fchannelIDList = null;
+
+      this.plType = 0;
+
       this.iconStopped = Gio.icon_new_for_string(Extension.path + '/icons/gser-icon-stopped-symbolic.svg');
       this.iconPlaying = Gio.icon_new_for_string(Extension.path + '/icons/gser-icon-playing-symbolic.svg');
 
@@ -73,16 +81,17 @@ var RadioExtension = GObject.registerClass(
       const sep1 = new PopupMenu.PopupSeparatorMenuItem();
       this.menu.addMenuItem(sep1);
 
-      this._myChannelsMenu = new PopupMenu.PopupMenuItem("My Channels");
+      this._myChannelsMenu = new PopupMenu.PopupSubMenuMenuItem("My Channels");
       this.menu.addMenuItem(this._myChannelsMenu);
 
-      this._favourite = new PopupMenu.PopupMenuItem("Favourite");
+      this._favourite = new PopupMenu.PopupSubMenuMenuItem("Favourite");
       this.menu.addMenuItem(this._favourite);
 
       const sep2 = new PopupMenu.PopupSeparatorMenuItem();
       this.menu.addMenuItem(sep2);
 
       this._buildMenuItems();
+
 
     }
 
@@ -191,7 +200,6 @@ var RadioExtension = GObject.registerClass(
         });
         this.previousButton.set_child(this.previousIcon);
         this.previousButton.connect('clicked', () => {
-            this._stop();
             this._previous();
         });
 
@@ -223,7 +231,6 @@ var RadioExtension = GObject.registerClass(
         });
         this.nextButton.set_child(this.nextIcon);
         this.nextButton.connect('clicked', () => {
-            this._stop();
             this._next();
         });
 
@@ -243,16 +250,24 @@ var RadioExtension = GObject.registerClass(
 
     //event handlers
     _updateWithIndex(){
-      const index = this.playIndex;
-      this.tagListLabel.text = this.channelList[index][1];
-      this.playLabel.text = this.channelList[index][0];
-      this._play(this.channelIDList[index]);
+      stopStream();
+      if(this.plType===0){
+        var index = this.playIndex;
+        this.tagListLabel.text = this.channelList[index][1];
+        this.playLabel.text = this.channelList[index][0];
+        this._play(this.channelIDList[index]);
+        return;
+      }
+      var index = this.fplayIndex;
+      this.tagListLabel.text = this.fchannelList[index][1];
+      this.playLabel.text = this.fchannelList[index][0];
+      this._play(this.fchannelIDList[index]);
     }
 
     _onPlayButtonClicked() {
       if(!this.isOn) return;
       if(this.isPlaying){
-        this._stop();
+        stopStream();
         this.isPlaying = false;
         this.playButton.set_child(this.playIcon);
         return;
@@ -276,20 +291,68 @@ var RadioExtension = GObject.registerClass(
         return;
       }
       this.playIndex = 0;
+      this.fplayIndex = 0;
+
       this.isOn = true;
+      this._updateMyChannels();
+      this._updateFavourite();
+    }
+
+    _updateMyChannels(){
       searchRG("mirchi")
         .then(json => {
           [ this.channelList, this.channelIDList ] = json;
+
+          this.channelList.forEach(_channel=>{
+            // Add items to _myChannelsMenu
+            var myStation = new PopupMenu.PopupMenuItem(_channel[0]);
+            myStation.stationPlayIndex = this.channelList.indexOf(_channel);
+            this._myChannelsMenu.menu.addMenuItem(myStation);
+            // Add onClick event listeners
+            myStation.connect('activate', () => {
+              this.plType = 0;
+              stopStream();
+              this.playIndex = myStation.stationPlayIndex;
+              this._updateWithIndex();
+            });
+          });
+          // setting power button color to red
+          if(!this.powerButton.has_style_class_name("power-active")){
+            this.powerButton.add_style_class_name("power-active");
+          }
         })
         .catch(error => {
           const errorMessage = `Error occurred: ${error}`;
           showNotification(errorMessage);
         });
-      if(!this.powerButton.has_style_class_name("power-active")){
-        this.powerButton.add_style_class_name("power-active");
-      }
     }
 
+    _updateFavourite(){
+      // Add items to _favourite
+      getChannels()
+        .then(json => {
+          [ this.fchannelList, this.fchannelIDList ] = json;
+          // clear menu before adding
+
+          this.fchannelList.forEach(_channel=>{
+            // Add items to _myChannelsMenu
+            var myStation = new PopupMenu.PopupMenuItem(_channel[0]);
+            myStation.stationPlayIndex = this.fchannelList.indexOf(_channel);
+            this._favourite.menu.addMenuItem(myStation);
+            // Add onClick event listeners
+            myStation.connect('activate', () => {
+              this.plType = 1;
+              stopStream();
+              this.fplayIndex = myStation.stationPlayIndex;
+              this._updateWithIndex();
+            });
+          });
+        })
+        .catch(error => {
+          const errorMessage = `Error occurred: ${error}`;
+          showNotification(errorMessage);
+        });
+    }
     // sub-action listeners
     _play(id){
       var url = getListenUrl(id);
@@ -299,12 +362,24 @@ var RadioExtension = GObject.registerClass(
 
     _stop(){
       stopStream();
+      this._favourite.menu._getMenuItems().forEach((menuItem)=>menuItem.destroy());
+      this._myChannelsMenu.menu._getMenuItems().forEach((menuItem)=>menuItem.destroy());
     }
 
     _next(){
       if(!this.isOn) return;
-      if(this.playIndex < this.channelList.length-1){
-        this.playIndex++;
+      if(this.plType === 0){
+        if(this.playIndex < this.channelList.length-1){
+          this.playIndex++;
+          stopStream();
+          this._updateWithIndex();
+          return;
+        }
+        return;
+      }
+      if(this.fplayIndex < this.fchannelList.length-1){
+        this.fplayIndex++;
+        stopStream();
         this._updateWithIndex();
         return;
       }
@@ -312,8 +387,18 @@ var RadioExtension = GObject.registerClass(
 
     _previous(){
       if(!this.isOn) return;
-      if(this.playIndex>0){
-        this.playIndex--;
+      if(this.plType===0){
+        if(this.playIndex>0){
+          this.playIndex--;
+          stopStream();
+          this._updateWithIndex();
+          return;
+        }
+        return;
+      }
+      if(this.fplayIndex>0){
+        this.fplayIndex--;
+        stopStream();
         this._updateWithIndex();
         return;
       }
@@ -356,6 +441,7 @@ var RadioExtension = GObject.registerClass(
 
     _finish(){
       // un-_init-ing class
+      this._stop();
       this.iconStopped.destroy();
       this.iconPlaying.destroy();
       this._radioIcon.destroy();
