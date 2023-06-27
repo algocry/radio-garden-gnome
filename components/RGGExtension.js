@@ -6,7 +6,7 @@ const ExtensionUtils = imports.misc.extensionUtils;
 const Extension = ExtensionUtils.getCurrentExtension();
 const { playStream, stopStream } = Extension.imports.utils.player;
 const { runCommand, showNotification } = Extension.imports.utils.sysUtils;
-const { httpRequest, getChannels, getListenUrl, searchRG } = Extension.imports.lib.librgarden;
+const { getChannels, getListenUrl, search, browse, playlist } = Extension.imports.lib.librgarden;
 
 var RadioExtension = GObject.registerClass(
   class RadioExtension extends PanelMenu.Button {
@@ -27,8 +27,25 @@ var RadioExtension = GObject.registerClass(
 
       this.plType = 0;
 
-      this.iconStopped = Gio.icon_new_for_string(Extension.path + '/icons/gser-icon-stopped-symbolic.svg');
-      this.iconPlaying = Gio.icon_new_for_string(Extension.path + '/icons/gser-icon-playing-symbolic.svg');
+      this.stationPlaylistList = null;
+      this.stationPlaylistUrlList = null;
+      this.stationPlayIndex = 0;
+
+      this.stationsData = {
+        "favorites":[]
+      };
+      this.favouritesData = {
+        "favorites":[
+          "C0wJrWRc",
+          "jv-c_Rdl",
+          "BsSSEu3K",
+          "wyMsbLER",
+          "Qv0VFuT0",
+          "1_yywtaN"
+        ]
+      }
+      this.iconStopped = Gio.icon_new_for_string(`${Extension.path}/icons/gser-icon-stopped-symbolic.svg`);
+      this.iconPlaying = Gio.icon_new_for_string(`${Extension.path}/icons/gser-icon-playing-symbolic.svg`);
 
       // Create the radio icon
       this._radioIcon = new St.Icon({
@@ -285,6 +302,9 @@ var RadioExtension = GObject.registerClass(
         this.isPlaying = false;
         this.playButton.set_child(this.playIcon);
         this.isOn = false;
+        this.stationPlaylistList = null;
+        this.stationPlaylistUrlList = null;
+        this.stationPlayIndex = 0;
         if(this.powerButton.has_style_class_name("power-active")){
           this.powerButton.remove_style_class_name("power-active");
         }
@@ -299,37 +319,46 @@ var RadioExtension = GObject.registerClass(
     }
 
     _updateMyChannels(){
-      searchRG("mirchi")
-        .then(json => {
-          [ this.channelList, this.channelIDList ] = json;
+      browse().then(json=>{
+        [ this.stationPlaylistList, this.stationPlaylistUrlList ] = json;
+        }).then(()=>{
+          playlist(this.stationPlaylistUrlList[this.stationPlayIndex])
+            .then(json => {
+              [ this.channelList, this.channelIDList ] = json;
 
-          this.channelList.forEach(_channel=>{
-            // Add items to _myChannelsMenu
-            var myStation = new PopupMenu.PopupMenuItem(_channel[0]);
-            myStation.stationPlayIndex = this.channelList.indexOf(_channel);
-            this._myChannelsMenu.menu.addMenuItem(myStation);
-            // Add onClick event listeners
-            myStation.connect('activate', () => {
-              this.plType = 0;
-              stopStream();
-              this.playIndex = myStation.stationPlayIndex;
-              this._updateWithIndex();
+              this.channelList.forEach(_channel=>{
+                // Add items to _myChannelsMenu
+                var myStation = new PopupMenu.PopupMenuItem(_channel[0]);
+                myStation.stationPlayIndex = this.channelList.indexOf(_channel);
+                this._myChannelsMenu.menu.addMenuItem(myStation);
+                // Add onClick event listeners
+                myStation.connect('activate', () => {
+                  this.plType = 0;
+                  stopStream();
+                  this.playIndex = myStation.stationPlayIndex;
+                  this._updateWithIndex();
+                  this.isPlaying = true;
+                  this.playButton.set_child(this.pauseIcon);
+                });
+              });
+              // setting power button color to red
+              if(!this.powerButton.has_style_class_name("power-active")){
+                this.powerButton.add_style_class_name("power-active");
+              }
+            })
+            .catch(error => {
+              const errorMessage = `Error [playlist]: ${error}`;
+              showNotification(errorMessage);
             });
-          });
-          // setting power button color to red
-          if(!this.powerButton.has_style_class_name("power-active")){
-            this.powerButton.add_style_class_name("power-active");
-          }
-        })
-        .catch(error => {
-          const errorMessage = `Error occurred: ${error}`;
+        }).catch(error => {
+          const errorMessage = `Error [browse]: ${error}`;
           showNotification(errorMessage);
         });
     }
 
     _updateFavourite(){
       // Add items to _favourite
-      getChannels()
+      getChannels(this.favouritesData)
         .then(json => {
           [ this.fchannelList, this.fchannelIDList ] = json;
           // clear menu before adding
@@ -345,6 +374,8 @@ var RadioExtension = GObject.registerClass(
               stopStream();
               this.fplayIndex = myStation.stationPlayIndex;
               this._updateWithIndex();
+              this.isPlaying = true;
+              this.playButton.set_child(this.pauseIcon);
             });
           });
         })
@@ -355,6 +386,7 @@ var RadioExtension = GObject.registerClass(
     }
     // sub-action listeners
     _play(id){
+      stopStream();
       var url = getListenUrl(id);
       playStream(url);
       showNotification(url);
@@ -364,6 +396,8 @@ var RadioExtension = GObject.registerClass(
       stopStream();
       this._favourite.menu._getMenuItems().forEach((menuItem)=>menuItem.destroy());
       this._myChannelsMenu.menu._getMenuItems().forEach((menuItem)=>menuItem.destroy());
+      this.tagListLabel.text = "Radio";
+      this.playLabel.text = "Location";
     }
 
     _next(){
