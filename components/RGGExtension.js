@@ -7,6 +7,7 @@ const Extension = ExtensionUtils.getCurrentExtension();
 const { playStream, stopStream } = Extension.imports.utils.player;
 const { runCommand, showNotification } = Extension.imports.utils.sysUtils;
 const { getChannels, getListenUrl, search, browse, playlist } = Extension.imports.lib.librgarden;
+const { readJsonFromFile, writeJsonToFile } = Extension.imports.utils.io;
 
 var RadioExtension = GObject.registerClass(
   class RadioExtension extends PanelMenu.Button {
@@ -31,19 +32,9 @@ var RadioExtension = GObject.registerClass(
       this.stationPlaylistUrlList = null;
       this.stationPlayIndex = 0;
 
-      this.stationsData = {
-        "favorites":[]
-      };
-      this.favouritesData = {
-        "favorites":[
-          "C0wJrWRc",
-          "jv-c_Rdl",
-          "BsSSEu3K",
-          "wyMsbLER",
-          "Qv0VFuT0",
-          "1_yywtaN"
-        ]
-      }
+      this.stationsData = null;
+      this.favouritesData = null;
+
       this.iconStopped = Gio.icon_new_for_string(`${Extension.path}/icons/gser-icon-stopped-symbolic.svg`);
       this.iconPlaying = Gio.icon_new_for_string(`${Extension.path}/icons/gser-icon-playing-symbolic.svg`);
 
@@ -305,6 +296,9 @@ var RadioExtension = GObject.registerClass(
         this.stationPlaylistList = null;
         this.stationPlaylistUrlList = null;
         this.stationPlayIndex = 0;
+        this.stationsData = null;
+        this.favouritesData = null;
+
         if(this.powerButton.has_style_class_name("power-active")){
           this.powerButton.remove_style_class_name("power-active");
         }
@@ -314,8 +308,15 @@ var RadioExtension = GObject.registerClass(
       this.fplayIndex = 0;
 
       this.isOn = true;
+      this._loadPlaylistsFromFile();
+      // showNotification("After load playlist");
       this._updateMyChannels();
       this._updateFavourite();
+    }
+
+    _loadPlaylistsFromFile(){
+      this.stationsData = readJsonFromFile(`${Extension.path}/configurations/customPlaylists.json`);
+      this.favouritesData = readJsonFromFile(`${Extension.path}/configurations/favourites.json`);
     }
 
     _updateMyChannels(){
@@ -380,7 +381,7 @@ var RadioExtension = GObject.registerClass(
           });
         })
         .catch(error => {
-          const errorMessage = `Error occurred: ${error}`;
+          const errorMessage = ` ${error}`;
           showNotification(errorMessage);
         });
     }
@@ -396,8 +397,8 @@ var RadioExtension = GObject.registerClass(
       stopStream();
       this._favourite.menu._getMenuItems().forEach((menuItem)=>menuItem.destroy());
       this._myChannelsMenu.menu._getMenuItems().forEach((menuItem)=>menuItem.destroy());
-      this.tagListLabel.text = "Radio";
-      this.playLabel.text = "Location";
+      this.tagListLabel.text = "Location";
+      this.playLabel.text = "Station";
     }
 
     _next(){

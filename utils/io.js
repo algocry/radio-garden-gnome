@@ -1,90 +1,31 @@
-const Gio = imports.gi.Gio;
 const GLib = imports.gi.GLib;
+const Gio = imports.gi.Gio;
 const Extension = imports.misc.extensionUtils.getCurrentExtension();
-const Shell = imports.gi.Shell;
+const { showNotification } = Extension.imports.utils.sysUtils;
 
-const FILE_NAME = 'channelList.json'
-const DIR_NAME = '.gse-radio'
-
-function read(){
-	let dir_path = GLib.get_home_dir() + "/" + DIR_NAME ;
-	create(dir_path);
-	let file_path = GLib.get_home_dir() + "/" + DIR_NAME + "/" + FILE_NAME;
-	let content;
-	let channelList;
-	try {
-		content = Shell.get_file_contents_utf8_sync(file_path);
-	} catch (e) {
-		global.logError('Failed to load channelList.json: ' + e);
-		return null;
-	}
-	// parse json file
-	try {
-		channelList = JSON.parse(content);
-	} catch (e) {
-		global.logError('Failed to parse channelList.json: ' + e);
-		return null;
-	}
-	return channelList;
+function readJsonFromFile(filePath) {
+  try {
+    const file = Gio.File.new_for_path(filePath);
+    const [, contents] = file.load_contents(null);
+    const content = contents.toString();
+    const jsonData = JSON.parse(content);
+    return jsonData;
+  } catch (error) {
+    log(error.message);
+    return null;
+  }
 }
 
-// create channelList file in home directory
-// ~/.gse-radio/channelList.json
-function create(dir_path) {
-	let dir = Gio.file_new_for_path(dir_path);
-	let source_file = Gio.file_new_for_path(Extension.path).get_child(FILE_NAME);
-	if (!dir.query_exists(null)) {
-		try {
-			dir.make_directory(null);
-			let file = dir.get_child(FILE_NAME);
-			source_file.copy(file, Gio.FileCopyFlags.NONE, null, null);
-		} catch (e) {
-			global.logError('Failed to create directory and/or file! ' + e);
-		}
-	} else {
-		let file = dir.get_child(FILE_NAME);
-		if (!file.query_exists(null)) {
-			try {
-				source_file.copy(file, Gio.FileCopyFlags.NONE, null, null);
-			} catch (e) {
-				global.logError('Failed to create file! ' + e);
-			}
-		}
-	}
+function writeJsonToFile(data, filePath) {
+  try {
+    const jsonContent = JSON.stringify(data, null, "\t");
+    GLib.file_set_contents(filePath, jsonContent);
+  } catch (error) {
+    showNotification(`Failed to write JSON file: ${error.message}`);
+  }
 }
 
-function write(channels, lastPlayed) {
-	if (channels != null && channels.length > 0) {
-		let filepath = GLib.get_home_dir() + "/" + DIR_NAME + "/" + FILE_NAME;
-		let file = Gio.file_new_for_path(filepath);
-		let raw = file.replace(null, false, Gio.FileCreateFlags.NONE, null);
-		let out = Gio.BufferedOutputStream.new_sized(raw, 4096);
-
-		// Format output and write channels
-		Shell.write_string_to_stream(out, "{ \"channels\":[\n");
-		for (var i = 0; i < channels.length; i++) {
-			Shell.write_string_to_stream(out, "\t");
-			Shell.write_string_to_stream(out, JSON.stringify({
-				id: channels[i].getId(),
-				name: channels[i].getName(),
-				address: channels[i].getUri(),
-				favourite: channels[i].getFavourite(),
-				encoding: channels[i].getEncoding()
-			}, null, "\t"));
-			// remove last comma
-			if (i != channels.length - 1) {
-				Shell.write_string_to_stream(out, ",");
-			}
-		}
-		// write lastplayed channel
-		Shell.write_string_to_stream(out, "\n],\n\n  \"lastplayed\":");
-		Shell.write_string_to_stream(out, JSON.stringify({
-			id: lastPlayed.getId(),
-			name: lastPlayed.getName(),
-			address: lastPlayed.getUri(),
-			encoding: lastPlayed.getEncoding()
-		}, null, "\t"));
-		Shell.write_string_to_stream(out, "\n}");
-		out.close(null);
-	}
-}
+var exports = {
+	readJsonFromFile: readJsonFromFile,
+	writeJsonToFile: writeJsonToFile
+};
